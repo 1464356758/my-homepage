@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人主页</title>
+    <style>
+        :root {
+            --toolbar-height: 52px;
+            --gap: 8px;
+            --radius: 12px;
+            --accent: #4a90d9;
+            --sidebar-min: 280px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, #e8ecf1, #dce3ea);
+            height: 100vh; overflow: hidden;
+            color: #333;
+        }
+        .toolbar {
+            position: fixed; top:0; left:0; right:0; height: var(--toolbar-height);
+            display: none;
+            align-items:center; gap:10px; padding:0 20px;
+            background: rgba(255,255,255,0.75); backdrop-filter: blur(16px);
+            border-bottom:1px solid rgba(0,0,0,0.05); z-index:1000; flex-wrap:wrap;
+        }
+        body.is-admin .toolbar { display: flex; }
+        .toolbar button {
+            padding:6px 14px; border:1px solid #ccc; border-radius:20px;
+            background:#fff; cursor:pointer; font-size:0.85rem; transition:0.2s;
+        }
+        .toolbar button:hover { background:#f5f5f5; }
+        .toolbar button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .toolbar button.danger { color:#e05555; border-color:#e05555; }
+        .toolbar .spacer { flex:1; }
+
+        .main-container {
+            display: flex; flex-wrap: wrap;
+            height: 100vh; margin-top: 0;
+            align-content: flex-start;
+        }
+        body.is-admin .main-container {
+            height: calc(100vh - var(--toolbar-height));
+            margin-top: var(--toolbar-height);
+        }
+
+        .sidebar {
+            flex: 1 1 var(--sidebar-min);
+            min-width: var(--sidebar-min);
+            background: transparent;
+            overflow-y: auto;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .profile-content { text-align: center; padding: 40px; max-width: 400px; width: 100%; }
+        .profile-avatar {
+            width: 120px; height: 120px; border-radius: 50%; overflow: hidden;
+            margin: 0 auto 20px;
+            border: 4px solid rgba(255,255,255,0.9);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            background: #e8ecf1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .profile-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+        .profile-avatar .avatar-placeholder { font-size: 3rem; color: #bbb; }
+        .profile-name { font-size: 1.8rem; font-weight:700; margin-bottom:8px; }
+        .profile-bio { color:#555; font-size:1rem; line-height:1.6; margin-bottom:20px; }
+        .profile-links { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+        .profile-link {
+            padding:6px 16px;
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(4px);
+            border-radius:20px;
+            text-decoration:none; color:#444; font-size:0.9rem;
+            transition:0.2s;
+        }
+        .profile-link:hover { background: rgba(255,255,255,0.9); }
+
+        .grid-area {
+            flex: 0 0 60%;
+            max-width: 60%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .grid-container {
+            display:grid;
+            gap: var(--gap);
+            grid-template-columns: repeat(4, 1fr);
+            grid-auto-rows: minmax(120px, auto);
+            min-height: 400px;
+        }
+
+        .card {
+            position:relative;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: var(--radius);
+            box-shadow: none;
+            border: none;
+            outline: none;
+            display:flex; flex-direction:column;
+            transition: background 0.2s;
+            min-height: 120px;
+        }
+        .card.editable:hover { background: rgba(255,255,255,0.25); }
+        .card.dragging {
+            z-index:999!important;
+            box-shadow:0 8px 24px rgba(0,0,0,0.15)!important;
+            opacity:0.95;
+            pointer-events:none;
+        }
+
+        .card .delete-btn {
+            position:absolute; top:6px; right:8px; width:22px; height:22px;
+            border-radius:50%; background:rgba(0,0,0,0.3); color:#fff; border:none;
+            cursor:pointer; font-size:14px; z-index:10; display:none;
+            align-items:center; justify-content:center;
+        }
+        .card.editable .delete-btn { display:flex; }
+        .card .drag-handle {
+            position:absolute; top:6px; left:36px; width:28px; height:20px;
+            cursor:grab; display:none; align-items:center; justify-content:center;
+            background:rgba(0,0,0,0.05); border-radius:4px; z-index:5;
+        }
+        .card.editable .drag-handle { display:flex; }
+        .card .resize-handle {
+            position:absolute; bottom:6px; right:6px; width:22px; height:22px;
+            cursor:nwse-resize; display:none; align-items:center; justify-content:center;
+            background:rgba(0,0,0,0.05); border-radius:4px; z-index:5;
+        }
+        .card.editable .resize-handle { display:flex; }
+        .card .card-inner { flex:1; padding:12px; display:flex; flex-direction:column; min-height:0; }
+        .card .card-type-badge {
+            position:absolute; top:8px; left:8px; font-size:0.65rem; padding:2px 8px;
+            background:rgba(255,255,255,0.7); border-radius:10px; color:#666;
+            pointer-events:none;
+            display:none;
+        }
+        .card.editable .card-type-badge { display:block; }
+        .text-content { white-space:pre-wrap; word-break:break-word; outline:none; }
+        .card img, .card video, .card iframe { width:100%; height:100%; object-fit:cover; border-radius:8px; }
+
+        .card.ai-card .ai-chat-area { display:flex; flex-direction:column; flex:1; min-height:0; }
+        .card.ai-card .ai-messages { flex:1; overflow-y:auto; padding:4px 0; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; }
+        .card.ai-card .ai-message { display:flex; flex-direction:column; }
+        .card.ai-card .ai-message.user { align-items:flex-end; }
+        .card.ai-card .ai-message.assistant { align-items:flex-start; }
+        .card.ai-card .bubble { padding:6px 12px; border-radius:14px; max-width:85%; word-break:break-word; font-size:0.85rem; line-height:1.4; }
+        .card.ai-card .ai-message.user .bubble { background:var(--accent); color:#fff; }
+        .card.ai-card .ai-message.assistant .bubble { background:rgba(0,0,0,0.06); color:#333; }
+        .card.ai-card .ai-key-row { display:none; gap:4px; margin-bottom:6px; }
+        .card.ai-card.editable .ai-key-row { display:flex; }
+        .card.ai-card .ai-key-row input {
+            flex:1; padding:4px 8px; border-radius:8px; border:1px solid rgba(0,0,0,0.1);
+            font-size:0.75rem; background:rgba(255,255,255,0.5);
+        }
+        .card.ai-card .ai-input-row { display:flex; gap:4px; }
+        .card.ai-card .ai-input-row input {
+            flex:1; padding:6px 10px; border-radius:16px; border:1px solid rgba(0,0,0,0.1);
+            font-size:0.8rem; background:rgba(255,255,255,0.5);
+        }
+        .card.ai-card .ai-input-row button {
+            padding:6px 12px; border-radius:16px; background:var(--accent);
+            color:#fff; border:none; cursor:pointer; font-size:0.8rem;
+        }
+
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2000; display:flex; align-items:center; justify-content:center; }
+        .modal { background:#fff; border-radius:14px; padding:24px; width:90%; max-width:450px; }
+        .toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:10px 24px; border-radius:24px; z-index:3000; animation:toastIn 0.3s; }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(20px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+
+        @media (max-width: 1080px) {
+            body { overflow: auto; }
+            .main-container { height: auto; min-height: 100vh; }
+            .sidebar { flex: 0 0 100%; min-width: auto; padding: 20px; }
+            .profile-content { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; padding: 10px; }
+            .profile-avatar { width: 70px; height: 70px; margin: 0; }
+            .profile-name { font-size: 1.2rem; }
+            .profile-bio { font-size: 0.85rem; flex-basis: 100%; margin-bottom: 0; }
+            .grid-area { flex: 1 1 100%; max-width: 100%; height: auto; overflow-y: visible; padding: 10px; }
+            .grid-container { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .profile-avatar { width: 60px; height: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar" id="toolbar">
+    <button id="btnToggleMode" class="primary" style="display:none;">👁 预览</button>
+    <button id="btnAddText" style="display:none;" class="admin-only">📝 文字</button>
+    <button id="btnAddImage" style="display:none;" class="admin-only">🖼 图片</button>
+    <button id="btnAddVideo" style="display:none;" class="admin-only">🎬 视频</button>
+    <button id="btnAddWeb" style="display:none;" class="admin-only">🌐 网页</button>
+    <button id="btnAddAI" style="display:none;" class="admin-only">🤖 AI</button>
+    <span class="spacer"></span>
+    <button id="btnEditProfile" style="display:none;" class="admin-only">✏️ 资料</button>
+    <button id="btnSaveToCloud" style="display:none;" class="admin-only">💾 保存到云端</button>
+    <button id="btnClearAll" class="danger admin-only" style="display:none;">🗑 清空</button>
+    <button id="btnLogout" style="display:none;" class="admin-only">🚪 退出编辑</button>
+</div>
+
+<div class="main-container">
+    <aside class="sidebar" id="sidebar">
+        <div class="profile-content">
+            <div class="profile-avatar">
+                <img id="avatarImg" src="" alt="头像" style="display:none;">
+                <span class="avatar-placeholder" id="avatarPlaceholder">👤</span>
+            </div>
+            <div class="profile-name" id="infoName">张三</div>
+            <div class="profile-bio" id="infoBio">欢迎来到我的主页</div>
+            <div class="profile-links" id="infoLinks">
+                <a class="profile-link" href="#">GitHub</a>
+                <a class="profile-link" href="#">博客</a>
+            </div>
+        </div>
+    </aside>
+    <div class="grid-area" id="gridArea">
+        <div class="grid-container" id="gridContainer"></div>
+    </div>
+</div>
+
+<div id="modalContainer"></div>
+<div id="toastContainer"></div>
+
+<script>
+(function() {
+    const TOTAL_COLS = 4;
+    const ADMIN_PASSWORD = 'mypage123'; // 必须与Worker环境变量一致
+const WORKER_URL = "/api/save";
+
+    // 检查管理员权限
+    const urlParams = new URLSearchParams(window.location.search);
+    const adminPass = urlParams.get('admin');
+    const isAdmin = (adminPass === ADMIN_PASSWORD);
+    let isEditMode = isAdmin;
+
+    // 根据权限切换 body 类
+    if (isAdmin) {
+        document.body.classList.add('is-admin');
+    }
+
+    const $gridContainer = document.getElementById('gridContainer');
+    const $avatarImg = document.getElementById('avatarImg');
+    const $avatarPlaceholder = document.getElementById('avatarPlaceholder');
+    const $infoName = document.getElementById('infoName');
+    const $infoBio = document.getElementById('infoBio');
+    const $infoLinks = document.getElementById('infoLinks');
+    const $modalContainer = document.getElementById('modalContainer');
+    const $toastContainer = document.getElementById('toastContainer');
+    const $btnToggleMode = document.getElementById('btnToggleMode');
+    const $btnAddText = document.getElementById('btnAddText');
+    const $btnAddImage = document.getElementById('btnAddImage');
+    const $btnAddVideo = document.getElementById('btnAddVideo');
+    const $btnAddWeb = document.getElementById('btnAddWeb');
+    const $btnAddAI = document.getElementById('btnAddAI');
+    const $btnEditProfile = document.getElementById('btnEditProfile');
+    const $btnSaveToCloud = document.getElementById('btnSaveToCloud');
+    const $btnClearAll = document.getElementById('btnClearAll');
+    const $btnLogout = document.getElementById('btnLogout');
+
+    let data = null;
+    let dragState = null, resizeState = null;
+    let cardIdCounter = 0;
+
+    function updateAdminUI() {
+        const adminElements = document.querySelectorAll('.admin-only');
+        const display = isAdmin ? '' : 'none';
+        adminElements.forEach(el => el.style.display = display);
+        $btnToggleMode.style.display = isAdmin ? '' : 'none';
+        $btnToggleMode.textContent = isEditMode ? '👁 预览' : '✏️ 编辑';
+    }
+
+    function getDefaultData() {
+        return {
+            personalInfo: {
+                name: '张三', avatar: '', bio: '欢迎来到我的主页',
+                links: [{ label: 'GitHub', url: 'https://github.com' }, { label: '博客', url: 'https://example.com' }]
+            },
+            cards: [
+                { id:'c1', type:'text', content:{text:'双击编辑文字卡片'}, layout:{col:0,row:0,width:2,height:2} },
+                { id:'c2', type:'image', content:{url:'https://picsum.photos/400/300'}, layout:{col:2,row:0,width:2,height:2} },
+                { id:'c3', type:'web', content:{url:'https://example.com'}, layout:{col:0,row:2,width:2,height:2} }
+            ]
+        };
+    }
+
+    // 从 Worker 加载云端数据，若失败则使用本地存储或默认数据
+    async function loadData() {
+        try {
+            const res = await fetch(WORKER_URL);
+            if (res.ok) {
+                const cloudData = await res.json();
+                if (cloudData && cloudData.cards) {
+                    data = cloudData;
+                    // 同步到本地存储一份
+                    localStorage.setItem('personal_v15', JSON.stringify(data));
+                } else {
+                    throw new Error('无效数据');
+                }
+            } else {
+                throw new Error('网络错误');
+            }
+        } catch (e) {
+            // 回退到本地存储
+            const saved = localStorage.getItem('personal_v15');
+            if (saved) {
+                try { data = JSON.parse(saved); } catch(ex) { data = getDefaultData(); }
+            } else {
+                data = getDefaultData();
+            }
+        }
+        cardIdCounter = data.cards ? data.cards.length : 0;
+        data.cards.forEach(c => {
+            if(!c.layout) c.layout = {col:0,row:0,width:1,height:1};
+            if(c.type === 'ai') { c.content.messages = c.content.messages || []; c.content.apiKey = c.content.apiKey || ''; }
+            if(c.type === 'video') { c.content.bilibiliUrl = c.content.bilibiliUrl || ''; c.content.poster = c.content.poster || ''; c.content.lastResolved = c.content.lastResolved || 0; }
+        });
+    }
+
+    function saveDataLocally() {
+        localStorage.setItem('personal_v15', JSON.stringify(data));
+    }
+
+    // 保存到云端（仅管理员）
+    async function saveToCloud() {
+        if (!isAdmin) return;
+        try {
+            const res = await fetch(WORKER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Password': adminPass || ADMIN_PASSWORD
+                },
+                body: JSON.stringify({ data: data })
+            });
+            if (res.ok) {
+                showToast('✅ 已保存到云端，所有设备同步');
+            } else {
+                showToast('❌ 保存失败，请检查密码');
+            }
+        } catch (e) {
+            showToast('❌ 网络错误，保存失败');
+        }
+    }
+
+    function showToast(msg) {
+        const el = document.createElement('div'); el.className='toast'; el.textContent=msg;
+        $toastContainer.appendChild(el); setTimeout(()=> el.remove(), 2000);
+    }
+    function showModal(title, html, onConfirm) {
+        const overlay = document.createElement('div'); overlay.className='modal-overlay';
+        overlay.innerHTML = `<div class="modal"><h3>${title}</h3>${html}<div class="btn-row" style="display:flex;gap:8px;justify-content:flex-end;"><button class="cancel-btn">取消</button><button class="primary confirm-btn">确定</button></div></div>`;
+        $modalContainer.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.cancel-btn').addEventListener('click', close);
+        overlay.addEventListener('click', e => { if(e.target===overlay) close(); });
+        overlay.querySelector('.confirm-btn').addEventListener('click', () => {
+            const vals = {}; overlay.querySelectorAll('input,textarea').forEach(i => vals[i.name||i.placeholder] = i.value);
+            onConfirm(vals, close);
+        });
+    }
+    function escapeHTML(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+    function renderProfile() {
+        const p = data.personalInfo;
+        $infoName.textContent = p.name || '未设置';
+        $infoBio.textContent = p.bio || '';
+        if(p.avatar) { $avatarImg.src=p.avatar; $avatarImg.style.display='block'; $avatarPlaceholder.style.display='none'; }
+        else { $avatarImg.style.display='none'; $avatarPlaceholder.style.display='flex'; }
+        $infoLinks.innerHTML = '';
+        (p.links||[]).forEach(link => {
+            const a = document.createElement('a'); a.className='profile-link';
+            a.textContent=link.label; a.href=link.url; a.target='_blank';
+            if(isEditMode) a.addEventListener('click', e => { e.preventDefault(); showToast('🔗 '+link.url); });
+            $infoLinks.appendChild(a);
+        });
+    }
+
+    function deleteCard(idx) { if(!confirm('删除卡片？')) return; data.cards.splice(idx,1); saveDataLocally(); renderAll(); }
+    function onTextInput(e) { const idx = parseInt(e.target.dataset.cardIndex); if(data.cards[idx]) { data.cards[idx].content.text = e.target.innerText; saveDataLocally(); } }
+
+    function autoPlaceCard(card) {
+        const layout = card.layout;
+        const maxRow = data.cards.reduce((m,c)=> Math.max(m, c.layout.row + c.layout.height), 0);
+        for(let r=0; r<=maxRow; r++){
+            for(let c=0; c<=TOTAL_COLS-layout.width; c++){
+                let blocked = false;
+                for(let dr=0; dr<layout.height; dr++) for(let dc=0; dc<layout.width; dc++) if(data.cards.some(o=> o.id!==card.id && o.layout.col <= c+dc && o.layout.col+o.layout.width > c+dc && o.layout.row <= r+dr && o.layout.row+o.layout.height > r+dr)){ blocked=true; break; }
+                if(!blocked){ layout.col=c; layout.row=r; return; }
+            }
+        }
+        layout.col=0; layout.row=maxRow;
+    }
+
+    let globalApiKey = localStorage.getItem('ai_api_key') || '';
+
+    async function resolveVideoUrl(bilibiliUrl, forceRefresh = false) {
+        const CACHE_KEY = 'videoCache_' + bilibiliUrl;
+        const now = Date.now();
+        if (!forceRefresh) {
+            const cachedStr = localStorage.getItem(CACHE_KEY);
+            if (cachedStr) try { const cached = JSON.parse(cachedStr); if (cached.time && (now - cached.time < 2*60*60*1000)) return { video: cached.video, title: cached.title }; } catch(e){}
+        }
+        try {
+        const api =
+"/api/video?url=" +
+encodeURIComponent(bilibiliUrl);
+            const res = await fetch(api); const d = await res.json();
+            const result = { video: d.video, title: d.title };
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ video: d.video, title: d.title, time: now }));
+            return result;
+        } catch(e) { return null; }
+    }
+
+    function renderCards() {
+        $gridContainer.innerHTML = '';
+        data.cards.forEach((card, index) => {
+            const layout = card.layout;
+            layout.col = Math.max(0, Math.min(layout.col, TOTAL_COLS-1));
+            layout.width = Math.max(1, Math.min(layout.width, TOTAL_COLS - layout.col));
+            layout.row = Math.max(0, layout.row); layout.height = Math.max(1, layout.height);
+
+            const el = document.createElement('div');
+            el.className = `card ${card.type}-card`;
+            if(isEditMode) el.classList.add('editable');
+            el.dataset.cardIndex = index;
+            el.style.gridColumn = `${layout.col+1} / span ${layout.width}`;
+            el.style.gridRow = `${layout.row+1} / span ${layout.height}`;
+
+            let inner = '';
+            if (card.type === 'video') {
+                inner = `<div class="card-type-badge">🎬视频</div>
+                         <div class="card-inner" style="position:relative;">
+                            <video id="vid-${index}" controls playsinline preload="metadata"
+                                   ${card.content.poster ? `poster="${escapeHTML(card.content.poster)}"` : ''}
+                                   style="width:100%; height:100%; object-fit:cover; border-radius:8px;"
+                                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"></video>
+                            <span style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#aaa;">🎬 视频加载中...</span>
+                            <div style="font-size:0.8rem;text-align:center;padding:2px;">${escapeHTML(card.content.title||'')}</div>
+                         </div>`;
+                el.innerHTML = inner;
+                if (card.content.bilibiliUrl) {
+                    const videoEl = el.querySelector('video'), loadingSpan = el.querySelector('span'), titleDiv = el.querySelector('.card-inner div:last-child');
+                    resolveVideoUrl(card.content.bilibiliUrl).then(result => {
+                        if (result && result.video) {
+                            videoEl.src = result.video; videoEl.style.display = ''; loadingSpan.style.display = 'none';
+                            if (result.title) { card.content.title = result.title; titleDiv.textContent = result.title; if (isEditMode) saveDataLocally(); }
+                        } else { videoEl.style.display = 'none'; loadingSpan.style.display = 'block'; loadingSpan.textContent = '🎬 视频加载失败'; }
+                    }).catch(() => { videoEl.style.display = 'none'; loadingSpan.style.display = 'block'; loadingSpan.textContent = '🎬 视频加载失败'; });
+                } else {
+                    el.innerHTML = `<div class="card-type-badge">🎬视频</div><div class="card-inner"><span style="flex:1;display:flex;align-items:center;justify-content:center;color:#aaa;">🎬 暂无视频</span><div style="font-size:0.8rem;text-align:center;padding:2px;">${escapeHTML(card.content.title||'')}</div></div>`;
+                }
+                const handles = document.createElement('div');
+                handles.innerHTML = `<button class="delete-btn" data-card-index="${index}">✕</button><div class="drag-handle" data-card-index="${index}"><span style="display:flex;gap:3px;"><span style="width:4px;height:4px;background:#999;border-radius:50%;"></span><span style="width:4px;height:4px;background:#999;border-radius:50%;"></span></span></div><div class="resize-handle" data-card-index="${index}"><svg width="14" height="14" viewBox="0 0 24 24" fill="#999"><path d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z"/></svg></div>`;
+                el.appendChild(handles);
+                $gridContainer.appendChild(el);
+            } else {
+                switch(card.type) {
+                    case 'text': inner = `<div class="card-type-badge">📝文字</div><div class="card-inner"><div class="text-content" contenteditable="${isEditMode}" data-card-index="${index}">${escapeHTML(card.content.text||'')}</div></div>`; break;
+                    case 'image': inner = `<div class="card-type-badge">🖼图片</div><div class="card-inner">${card.content.url ? `<img src="${escapeHTML(card.content.url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">` : ''}<span style="display:${card.content.url?'none':'flex'};flex:1;align-items:center;justify-content:center;color:#aaa;">🖼 暂无图片</span></div>`; break;
+                    case 'web': inner = `<div class="card-type-badge">🌐网页</div><div class="card-inner">${card.content.url ? `<iframe src="${escapeHTML(card.content.url)}" sandbox="allow-scripts allow-same-origin"></iframe>` : '<span style="flex:1;display:flex;align-items:center;justify-content:center;">🌐 暂无网页</span>'}</div>`; break;
+                    case 'ai':
+                        const msgHTML = (card.content.messages||[]).map(m => `<div class="ai-message ${m.role}"><div class="bubble">${escapeHTML(m.content)}</div></div>`).join('');
+                        inner = `<div class="card-type-badge">🤖AI</div><div class="card-inner ai-chat-area"><div class="ai-key-row"><input type="text" class="ai-api-key-input" placeholder="API Key (DeepSeek)" value="${escapeHTML(globalApiKey)}"></div><div class="ai-messages">${msgHTML}</div><div class="ai-input-row"><input type="text" class="ai-msg-input" placeholder="输入消息..."><button class="ai-send-btn">发送</button></div></div>`;
+                        break;
+                }
+                inner += `<button class="delete-btn" data-card-index="${index}">✕</button><div class="drag-handle" data-card-index="${index}"><span style="display:flex;gap:3px;"><span style="width:4px;height:4px;background:#999;border-radius:50%;"></span><span style="width:4px;height:4px;background:#999;border-radius:50%;"></span></span></div><div class="resize-handle" data-card-index="${index}"><svg width="14" height="14" viewBox="0 0 24 24" fill="#999"><path d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z"/></svg></div>`;
+                if(card.type === 'web' && card.content.url) inner += `<div class="iframe-mask"></div>`;
+                el.innerHTML = inner;
+                $gridContainer.appendChild(el);
+                if (card.type === 'ai') {
+                    const apiKeyInput = el.querySelector('.ai-api-key-input'), msgInput = el.querySelector('.ai-msg-input'), sendBtn = el.querySelector('.ai-send-btn'), msgContainer = el.querySelector('.ai-messages');
+                    apiKeyInput.addEventListener('input', () => { globalApiKey = apiKeyInput.value.trim(); localStorage.setItem('ai_api_key', globalApiKey); });
+                    sendBtn.addEventListener('click', async () => {
+                        const msg = msgInput.value.trim(); if(!msg) return; if(!globalApiKey) { showToast('请先设置 API Key'); return; }
+                        card.content.messages.push({ role: 'user', content: msg }); saveDataLocally(); renderAll();
+                        try {
+                            const res = await fetch('https://api.deepseek.com/v1/chat/completions', { method:'POST', headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${globalApiKey}` }, body: JSON.stringify({ model:'deepseek-chat', messages: card.content.messages }) });
+                            const d = await res.json(); card.content.messages.push({ role: 'assistant', content: d.choices?.[0]?.message?.content || '无回复' });
+                        } catch(e) { card.content.messages.push({ role: 'assistant', content: '请求失败' }); }
+                        saveDataLocally(); renderAll();
+                    });
+                    msgInput.addEventListener('keypress', e => { if(e.key==='Enter') sendBtn.click(); });
+                    if(msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
+                }
+            }
+        });
+        bindCardEvents();
+    }
+
+    function bindCardEvents() {
+        if(!isEditMode) return;
+        document.querySelectorAll('.card.editable').forEach(el => {
+            const idx = parseInt(el.dataset.cardIndex);
+            el.querySelector('.delete-btn')?.addEventListener('click', e => { e.stopPropagation(); deleteCard(idx); });
+            el.querySelector('.drag-handle')?.addEventListener('mousedown', e => startDrag(e, el, idx));
+            el.addEventListener('mousedown', e => { if(e.target.closest('.delete-btn,.resize-handle,.drag-handle,.text-content,video,button,input,textarea,iframe')) return; startDrag(e, el, idx); });
+            el.querySelector('.resize-handle')?.addEventListener('mousedown', e => startResize(e, el, idx));
+            el.addEventListener('dblclick', e => { if(e.target.closest('.delete-btn,.resize-handle,.drag-handle')) return; handleDblClick(idx); });
+        });
+        document.querySelectorAll('.text-content[contenteditable]').forEach(tc => tc.addEventListener('input', onTextInput));
+    }
+
+    function handleDblClick(idx) {
+        const card = data.cards[idx]; if(!card) return;
+        if(card.type === 'image') showModal('更换图片', `<input name="url" value="${escapeHTML(card.content.url||'')}" placeholder="图片URL">`, (v,c)=>{ card.content.url=v['url']||''; saveDataLocally(); renderAll(); c(); });
+        else if(card.type === 'video') {
+            showModal('视频操作', `<p>当前B站链接: ${escapeHTML(card.content.bilibiliUrl||'无')}</p><button id="forceRefresh">强制重新解析</button><br><button id="changeUrl">更换链接</button>`, ()=>{});
+            const overlay = document.querySelector('.modal-overlay:last-child');
+            overlay.querySelector('#forceRefresh').addEventListener('click', async () => {
+                if (!card.content.bilibiliUrl) return;
+                const result = await resolveVideoUrl(card.content.bilibiliUrl, true);
+                if (result) { card.content.url = result.video; card.content.title = result.title; card.content.lastResolved = Date.now(); saveDataLocally(); renderAll(); showToast('已更新'); }
+                else showToast('解析失败');
+                overlay.remove();
+            });
+            overlay.querySelector('#changeUrl').addEventListener('click', () => { overlay.remove(); changeVideoDialog(idx); });
+        } else if(card.type === 'web') showModal('更换网页', `<input name="url" value="${escapeHTML(card.content.url||'')}" placeholder="网页URL">`, (v,c)=>{ card.content.url=v['url']||''; saveDataLocally(); renderAll(); c(); });
+    }
+
+    async function addVideo() {
+        const url = prompt("B站链接"); if(!url) return;
+        const poster = prompt("封面图片URL（可选）") || '';
+        try {
+            const {video, title} = await resolveVideoUrl(url, true);
+            const card = { id:'c'+(data.cards.length+1), type:'video', content:{ bilibiliUrl:url, url:video, title, poster, lastResolved:Date.now() }, layout:{col:0,row:0,width:2,height:2} };
+            autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll();
+        } catch(e) {
+            const card = { id:'c'+(data.cards.length+1), type:'video', content:{ bilibiliUrl:url, url:'', title:'加载失败', poster, lastResolved:0 }, layout:{col:0,row:0,width:2,height:2} };
+            autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll();
+        }
+    }
+    async function changeVideoDialog(idx) {
+        const url = prompt("新B站链接"); if(!url) return;
+        const poster = prompt("新封面URL（可选）", data.cards[idx].content.poster || '');
+        try {
+            const {video, title} = await resolveVideoUrl(url, true);
+            data.cards[idx].content.bilibiliUrl = url; data.cards[idx].content.url = video; data.cards[idx].content.title = title; data.cards[idx].content.poster = poster || ''; data.cards[idx].content.lastResolved = Date.now();
+            saveDataLocally(); renderAll();
+        } catch(e) { showToast('更换失败'); }
+    }
+
+    function startDrag(e, el, index) {
+        if(!isEditMode||dragState||resizeState) return; if(e.type==='mousedown'&&e.button!==0) return; e.preventDefault();
+        const layout = data.cards[index].layout, gridRect = $gridContainer.getBoundingClientRect(), gap = parseFloat(getComputedStyle($gridContainer).gap)||0, cellW = (gridRect.width - gap*(TOTAL_COLS-1))/TOTAL_COLS, cellH = cellW;
+        const clientX = e.touches?e.touches[0].clientX:e.clientX, clientY = e.touches?e.touches[0].clientY:e.clientY;
+        const px = gridRect.left + layout.col*(cellW+gap), py = gridRect.top + layout.row*(cellH+gap);
+        el.classList.add('dragging'); el.style.transform='translate(0,0)'; el.style.transition='none';
+        dragState = { el, layout, originalCol:layout.col, originalRow:layout.row, originalW:layout.width, originalH:layout.height, px, py, gridRect, cellW, cellH, gap, lastCol:layout.col, lastRow:layout.row, startX:clientX, startY:clientY };
+        document.addEventListener('mousemove', onDragMove); document.addEventListener('mouseup', onDragEnd);
+        document.addEventListener('touchmove', onDragMove, { passive:false }); document.addEventListener('touchend', onDragEnd);
+    }
+    function onDragMove(e) {
+        if(!dragState) return; e.preventDefault();
+        const clientX = e.touches?e.touches[0].clientX:e.clientX, clientY = e.touches?e.touches[0].clientY:e.clientY;
+        const dx = clientX - dragState.startX, dy = clientY - dragState.startY;
+        dragState.el.style.transform = `translate(${dx}px, ${dy}px)`;
+        const cx = dragState.px + dx + dragState.originalW*(dragState.cellW+dragState.gap)/2, cy = dragState.py + dy + dragState.originalH*(dragState.cellH+dragState.gap)/2;
+        let snapCol = Math.round((cx - dragState.gridRect.left - dragState.originalW*dragState.cellW/2)/(dragState.cellW+dragState.gap));
+        let snapRow = Math.round((cy - dragState.gridRect.top - dragState.originalH*dragState.cellH/2)/(dragState.cellH+dragState.gap));
+        snapCol = Math.max(0, Math.min(snapCol, TOTAL_COLS - dragState.originalW));
+        const maxRow = data.cards.reduce((m,c)=>Math.max(m, c.layout.row+c.layout.height),0);
+        snapRow = Math.max(0, Math.min(snapRow, maxRow+1));
+        dragState.lastCol=snapCol; dragState.lastRow=snapRow;
+    }
+    function onDragEnd(e) {
+        if(!dragState) return;
+        document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd);
+        document.removeEventListener('touchmove', onDragMove); document.removeEventListener('touchend', onDragEnd);
+        dragState.el.classList.remove('dragging'); dragState.el.style.transform = '';
+        dragState.layout.col = dragState.lastCol; dragState.layout.row = dragState.lastRow;
+        dragState.el.style.gridColumn = `${dragState.lastCol+1} / span ${dragState.originalW}`;
+        dragState.el.style.gridRow = `${dragState.lastRow+1} / span ${dragState.originalH}`;
+        saveDataLocally(); dragState=null; renderAll();
+    }
+
+    function startResize(e, el, index) {
+        if(!isEditMode||dragState||resizeState) return; e.preventDefault();
+        const layout = data.cards[index].layout, gridRect = $gridContainer.getBoundingClientRect(), gap = parseFloat(getComputedStyle($gridContainer).gap)||0, cellW = (gridRect.width - gap*(TOTAL_COLS-1))/TOTAL_COLS, cellH = cellW;
+        const clientX = e.touches?e.touches[0].clientX:e.clientX, clientY = e.touches?e.touches[0].clientY:e.clientY;
+        el.classList.add('resizing');
+        resizeState = { el, layout, originalW:layout.width, originalH:layout.height, originalCol:layout.col, originalRow:layout.row, startX:clientX, startY:clientY, gridRect, cellW, cellH, gap };
+        document.addEventListener('mousemove', onResizeMove); document.addEventListener('mouseup', onResizeEnd);
+    }
+    function onResizeMove(e) {
+        if(!resizeState) return; e.preventDefault();
+        const clientX = e.touches?e.touches[0].clientX:e.clientX, clientY = e.touches?e.touches[0].clientY:e.clientY;
+        let newW = Math.round(resizeState.originalW + (clientX-resizeState.startX)/(resizeState.cellW+resizeState.gap));
+        let newH = Math.round(resizeState.originalH + (clientY-resizeState.startY)/(resizeState.cellH+resizeState.gap));
+        newW = Math.max(1, Math.min(newW, TOTAL_COLS - resizeState.originalCol)); newH = Math.max(1, newH);
+        resizeState.layout.width = newW; resizeState.layout.height = newH;
+        resizeState.el.style.gridColumn = `${resizeState.originalCol+1} / span ${newW}`;
+        resizeState.el.style.gridRow = `${resizeState.originalRow+1} / span ${newH}`;
+    }
+    function onResizeEnd(e) {
+        if(!resizeState) return;
+        document.removeEventListener('mousemove', onResizeMove); document.removeEventListener('mouseup', onResizeEnd);
+        resizeState.el.classList.remove('resizing'); saveDataLocally(); resizeState=null; renderAll();
+    }
+
+    function renderAll() { renderProfile(); renderCards(); updateAdminUI(); }
+
+    // 事件绑定
+    $btnLogout.addEventListener('click', ()=>{ const url = new URL(window.location); url.searchParams.delete('admin'); window.location.href = url.toString(); });
+    $btnToggleMode.addEventListener('click', ()=>{ isEditMode=!isEditMode; if(!isEditMode){dragState=null;resizeState=null;} renderAll(); });
+    $btnAddText.addEventListener('click', ()=>{ const card = { id:'c'+(data.cards.length+1), type:'text', content:{text:'新文字'}, layout:{col:0,row:0,width:1,height:1} }; autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll(); });
+    $btnAddImage.addEventListener('click', ()=>{ showModal('添加图片', '<input name="url" placeholder="图片URL">', (v,c)=>{ const card = { id:'c'+(data.cards.length+1), type:'image', content:{url:v['url']||''}, layout:{col:0,row:0,width:1,height:1} }; autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll(); c(); }); });
+    $btnAddVideo.addEventListener('click', addVideo);
+    $btnAddWeb.addEventListener('click', ()=>{ showModal('添加网页', '<input name="url" placeholder="网页URL">', (v,c)=>{ const card = { id:'c'+(data.cards.length+1), type:'web', content:{url:v['url']||''}, layout:{col:0,row:0,width:2,height:2} }; autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll(); c(); }); });
+    $btnAddAI.addEventListener('click', ()=>{ const card = { id:'c'+(data.cards.length+1), type:'ai', content:{messages:[]}, layout:{col:0,row:0,width:2,height:2} }; autoPlaceCard(card); data.cards.push(card); saveDataLocally(); renderAll(); showToast('AI卡片已添加'); });
+    $btnEditProfile.addEventListener('click', ()=>{ const p = data.personalInfo; showModal('编辑资料', `<input name="name" value="${escapeHTML(p.name)}"><input name="avatar" value="${escapeHTML(p.avatar)}"><textarea name="bio">${escapeHTML(p.bio)}</textarea><textarea name="links" style="font-family:monospace;">${escapeHTML(JSON.stringify(p.links,null,2))}</textarea>`, (v,c)=>{ p.name=v['name']||''; p.avatar=v['avatar']||''; p.bio=v['bio']||''; try{p.links=JSON.parse(v['links']||'[]')}catch(e){} saveDataLocally(); renderAll(); c(); }); });
+    $btnClearAll.addEventListener('click', ()=>{ if(confirm('清空？')) { data=getDefaultData(); saveDataLocally(); renderAll(); } });
+    // 保存到云端
+    $btnSaveToCloud.addEventListener('click', saveToCloud);
+
+    document.addEventListener('keydown', e => { if(e.key==='Escape'){ if(dragState){ dragState.el.classList.remove('dragging'); dragState=null; renderAll(); } if(resizeState){ resizeState.el.classList.remove('resizing'); resizeState=null; renderAll(); } } });
+
+    // 初始化：先加载云端数据，再渲染
+    loadData().then(() => {
+        renderAll();
+    });
+})();
+</script>
+</body>
+</html>
